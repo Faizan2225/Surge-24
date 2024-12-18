@@ -46,11 +46,14 @@ const organizationSchema = new mongoose.Schema({
       ref: "User", // Relief workers
     },
   ],
+
   createdAt: {
     type: Date,
     default: Date.now,
   },
   verified: { type: Boolean, default: false },
+  emailVerificationOtp: { type: String, select: false },
+  otpExpires: { type: Date },
 });
 
 module.exports = mongoose.model("Organization", organizationSchema);

@@ -28,6 +28,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["individual", "worker", "organization_admin", "system_admin"],
       required: true,
+      defualt: "individual",
     },
     organization: {
       type: mongoose.Schema.Types.ObjectId,
@@ -35,19 +36,9 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
     phone: { type: String, required: false },
-    avatar: {
-      public_id: {
-        type: String,
-        required: true,
-        default: "default_id",
-      },
-      url: {
-        type: String,
-        required: true,
-        default: "default_url",
-      },
-    },
-    verified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationOtp: { type: String, select: false },
+    otpExpires: { type: Date },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -93,5 +84,4 @@ userSchema.methods.getJWTToken = function () {
 
 //   return resetToken;
 // };
-
 module.exports = mongoose.model("User", userSchema);

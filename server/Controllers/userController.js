@@ -1,49 +1,160 @@
 const express = require("express");
-const errorHandler = require("../utils/ErrorHandler");
-const User = require("../models/userModel");
+const errorHandler = require("../Utils/ErrorHandler");
+const User = require("../Models/userModel");
 const cloudinary = require("cloudinary");
-const catchAsyncErrors = require("../middlewares/catchAsyncErrors");
 const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 const sendToken = require("../utils/jwtToken");
+const catchAsyncErrors = require("../Middlewares/catchAsyncErrors");
+const Task = require("../Models/taskSchema");
 
-// register
-exports.registerUser = catchAsyncErrors(async (req, res, next) => {
-  if (!req.files || !req.files.avatar) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Missing required file" });
+// Register
+exports.registerUser = async (req, res, next) => {
+  try {
+    const { name, email, password, phoneNumber, role, organizationId } =
+      req.body;
+
+    if (!name || !email || !password) {
+      return next(
+        new errorHandler("Name, Email, and Password are required.", 400)
+      );
+    }
+
+    // Check if email is already in use
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return next(new errorHandler("Email already in use.", 401));
+    }
+
+    let organization = null;
+    if (role === "organization-worker" || role === "organization-admin") {
+      if (!organizationId) {
+        return next(new errorHandler("Organization ID is required..", 401));
+      }
+
+      organization = await Organization.findById(organizationId);
+      if (!organization) {
+        next(new errorHandler("Organization not found.", 401));
+      }
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpExpires = Date.now() + 10 * 60 * 1000;
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phoneNumber,
+      role: role || "individual",
+      organization: organization ? organization._id : null,
+      emailVerificationOtp: otp,
+      otpExpires,
+    });
+
+    console.log(user.email);
+
+    // Send OTP to user's email
+    await sendEmail({
+      email: user.email,
+      subject: "Verify Your Email",
+      message: `Your verification code is: ${otp}`,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "User registered! Please verify your email.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
+};
 
-  const file = req.files.avatar;
+// Verify email using OTP
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
 
-  const base64String = `data:${file.mimetype};base64,${file.data.toString(
-    "base64"
-  )}`;
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required." });
+    }
 
-  const myCloud = await cloudinary.v2.uploader.upload(base64String, {
-    folder: "Surge",
-    width: 500,
-    crop: "scale",
-  });
+    const user = await User.findOne({ email }).select(
+      "+emailVerificationOtp +otpExpires"
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
 
-  const { name, email, password, role, bio } = req.body;
+    if (user.emailVerificationOtp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP." });
+    }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role,
-    bio,
-    avatar: {
-      public_id: myCloud.public_id,
-      url: myCloud.secure_url,
-    },
-  });
+    if (user.otpExpires < Date.now()) {
+      return res
+        .status(400)
+        .json({ message: "OTP has expired. Please request a new one." });
+    }
 
-  sendToken(user, 200, res);
-});
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerificationOtp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
 
+    res.status(200).json({
+      message: "Email verified successfully. You can now log in.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
+    const user = await User.findOne({ email }).select(
+      "+emailVerificationOtp +otpExpires"
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ message: "Email is already verified." });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    user.emailVerificationOtp = otp;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
+    await user.save();
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "Verify Your Email",
+        message: `Your verification code is: ${otp}`,
+      });
+
+      sendToken(user, 200, res);
+    } catch (error) {
+      res.status(401).json({
+        message: error,
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server Error. Please try again." });
+  }
+};
+
+// login
 exports.login = catchAsyncErrors(async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -88,6 +199,73 @@ exports.getUserDetails = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({
     success: true,
     user,
+  });
+});
+
+// profile update
+exports.updateProfile = catchAsyncErrors(async (req, res, next) => {
+  const newUserData = {
+    name: req.body.name,
+    email: req.body.email,
+    bio: req.body.bio,
+  };
+
+  if (req.body && req.body.avatar) {
+    const user = await User.findById(req.user._id);
+
+    if (user.avatar && user.avatar.public_id) {
+      const imgId = user.avatar.public_id;
+      await cloudinary.v2.uploader.destroy(imgId);
+    }
+
+    const file = req.body.avatar;
+    const myCloud = await cloudinary.v2.uploader.upload(file, {
+      folder: "ArtGalleryAvatars",
+      width: 500,
+      crop: "scale",
+    });
+
+    newUserData.avatar = {
+      public_id: myCloud.public_id,
+      url: myCloud.secure_url,
+    };
+  }
+
+  const user = await User.findByIdAndUpdate(req.user._id, newUserData, {
+    new: true,
+    runValidators: true,
+    useFindAndModify: false,
+  });
+
+  res.status(200).json({ success: true, user });
+});
+
+// ------------TASKS----------------
+
+// assign task to uder
+exports.assignTaskToWorker = catchAsyncErrors(async (req, res, next) => {
+  const { taskId, workerId } = req.body;
+
+  const task = await Task.findById(taskId);
+  if (!task) {
+    return next(new errorHandler("Task not found.", 404));
+  }
+
+  const organization = await Organization.findById(req.user.organization);
+  if (
+    !organization ||
+    organization.admin.toString() !== req.user._id.toString()
+  ) {
+    return next(new errorHandler("Only admin can assign tasks.", 403));
+  }
+
+  task.assignedTo = workerId;
+  await task.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Task assigned successfully.",
+    task,
   });
 });
 
@@ -161,44 +339,6 @@ exports.resetPassword = catchAsyncErrors(async (req, res, next) => {
   await user.save();
 
   sendToken(user, 200, res);
-});
-
-// profile update
-exports.updateProfile = catchAsyncErrors(async (req, res, next) => {
-  const newUserData = {
-    name: req.body.name,
-    email: req.body.email,
-    bio: req.body.bio,
-  };
-
-  if (req.body && req.body.avatar) {
-    const user = await User.findById(req.user._id);
-
-    if (user.avatar && user.avatar.public_id) {
-      const imgId = user.avatar.public_id;
-      await cloudinary.v2.uploader.destroy(imgId);
-    }
-
-    const file = req.body.avatar;
-    const myCloud = await cloudinary.v2.uploader.upload(file, {
-      folder: "ArtGalleryAvatars",
-      width: 500,
-      crop: "scale",
-    });
-
-    newUserData.avatar = {
-      public_id: myCloud.public_id,
-      url: myCloud.secure_url,
-    };
-  }
-
-  const user = await User.findByIdAndUpdate(req.user._id, newUserData, {
-    new: true,
-    runValidators: true,
-    useFindAndModify: false,
-  });
-
-  res.status(200).json({ success: true, user });
 });
 
 // Update User Password

@@ -1,46 +1,28 @@
 const mongoose = require("mongoose");
 
 const taskSchema = new mongoose.Schema({
-  individual: {
+  need: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // one who needs help
+    ref: "Need",
     required: true,
   },
   organization: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Organization", // Organization addressing the task
-  },
-  type: {
-    type: String,
-    enum: ["Food", "Shelter", "Medical Assistance", "Other"],
+    ref: "Organization",
     required: true,
   },
-  description: {
-    type: String,
-    required: [
-      true,
-      "Please write the complete description; about what type of need is required.",
-    ],
-  },
-  urgency: {
-    type: String,
-    enum: ["High", "Medium", "Low"],
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
     required: true,
-  },
-  location: {
-    latitude: {
-      type: Number,
-      required: true,
-    },
-    longitude: {
-      type: Number,
-      required: true,
-    },
   },
   status: {
     type: String,
-    enum: ["Pending", "In Progress", "Resolved"],
-    default: "Pending",
+    enum: ["pending", "in progress", "completed"],
+    default: "pending",
+  },
+  deadline: {
+    type: Date,
   },
   createdAt: {
     type: Date,

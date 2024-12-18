@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const resourceSchema = new mongoose.Schema({
   organization: {
     type: mongoose.Schema.Types.ObjectId,
