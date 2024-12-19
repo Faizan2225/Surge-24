@@ -1,37 +1,41 @@
-import "./App.css";
-import { Route, Routes } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Routes, Route } from "react-router-dom";
+import LoginPage from "./components/Login";
+import RegisterPage from "./components/Register";
+import VerifyEmailPage from "./pages/VerifyEmail";
+// import DashboardPage from "./pages/DashboardPage"
+import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./Pages/Home";
 import Navbar from "./components/Layout/Navbar";
-import Footer from "./components/Layout/Footer";
-import Login from "./components/Login";
-import Register from "./components/Register";
-import Product from "./Pages/Product";
-import Dashboard from "./Pages/Dashboard";
-import ProtectedRoute from "./components/ProtectedRoute";
+import OrganizationRegistrationPage from "./Pages/organizationRegistration";
+import ReportNeedPage from "./Pages/ReportNeed";
+import { useAuthStore } from "./Store/authStore";
 
-function App() {
+const App = () => {
+  const initializeAuth = useAuthStore((state) => state.initializeAuth);
+
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
   return (
     <>
       <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} exact></Route>
-        <Route path="/login" element={<Login />} exact></Route>
-        <Route path="/register" element={<Register />} exact></Route>
-        <Route path="/product" element={<Product />} exact></Route>
-
+        <Route path="/login" exact element={<LoginPage />} />
+        <Route path="/" exact element={<Home />} />
+        <Route path="/register" exact element={<RegisterPage />} />
+        <Route path="/verify-email" exact element={<VerifyEmailPage />} />
+        <Route path="/report-need" exact element={<ReportNeedPage />} />
         <Route
-          path="/admin/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
+          path="/register-organization"
           exact
-        ></Route>
+          element={<OrganizationRegistrationPage />}
+        />
+        {/* <ProtectedRoute path="/dashboard" exact component={DashboardPage} /> */}
       </Routes>
-      <Footer />
     </>
   );
-}
+};
 
 export default App;

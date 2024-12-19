@@ -62,10 +62,7 @@ exports.registerUser = async (req, res, next) => {
       message: `Your verification code is: ${otp}`,
     });
 
-    res.status(201).json({
-      success: true,
-      message: "User registered! Please verify your email.",
-    });
+    sendToken(user, 200, res);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -106,8 +103,6 @@ exports.verifyEmail = async (req, res) => {
     res.status(200).json({
       message: "Email verified successfully. You can now log in.",
     });
-
-    sendToken(user, 200, res);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -143,8 +138,6 @@ exports.resendVerificationEmail = async (req, res) => {
         subject: "Verify Your Email",
         message: `Your verification code is: ${otp}`,
       });
-
-      sendToken(user, 200, res);
     } catch (error) {
       res.status(401).json({
         message: error,

@@ -17,3 +17,9 @@ export const logout = async () => {
   const response = await apiClient.post("/logout");
   return response.data;
 };
+
+// Verify Email function
+export const verifyEmail = async (otp) => {
+  const response = await apiClient.post("/verify-email", { otp });
+  return response.data;
+};

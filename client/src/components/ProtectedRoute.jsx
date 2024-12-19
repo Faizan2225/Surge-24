@@ -1,10 +1,18 @@
-import { Navigate } from "react-router-dom";
-import useUserStore from "../Store/userStore";
+import React from "react";
+import { Route, Navigate } from "react-router-dom";
+import useAuthStore from "../Store/authStore";
 
-const ProtectedRoute = ({ children }) => {
-  const { user } = useUserStore();
+const ProtectedRoute = ({ component: Component, ...rest }) => {
+  const { isAuthenticated } = useAuthStore();
 
-  return user ? children : <Navigate to="/login" />;
+  return (
+    <Route
+      {...rest}
+      render={(props) =>
+        isAuthenticated ? <Component {...props} /> : <Navigate to="/login" />
+      }
+    />
+  );
 };
 
 export default ProtectedRoute;

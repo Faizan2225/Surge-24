@@ -5,7 +5,6 @@ const useUserStore = create((set) => ({
   profile: null,
   isLoading: false,
 
-  // Fetch user profile data
   fetchProfile: async (token) => {
     set({ isLoading: true });
     try {
@@ -18,7 +17,6 @@ const useUserStore = create((set) => ({
     }
   },
 
-  // Update user profile
   updateProfile: async (updatedProfile, token) => {
     set({ isLoading: true });
     try {
