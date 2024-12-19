@@ -3,6 +3,7 @@ const errorHandler = require("../Utils/ErrorHandler");
 const catchAsyncErrors = require("../Middlewares/catchAsyncErrors");
 const Task = require("../Models/taskSchema");
 const Need = require("../Models/needModel");
+const User = require("../Models/userModel");
 const Organization = require("../Models/organizationsModel");
 
 const isAdmin = async (userId, organizationId) => {
@@ -30,11 +31,21 @@ const isWorkerOfOrganization = async (userId, organizationId) => {
 // Create a task for a need
 const createTask = async (req, res) => {
   try {
-    const { needId, assignedTo, deadline, organizationId } = req.body;
+    const { needId, assignedTo, deadline } = req.body;
 
-    await isAdmin(req.user.id, organizationId);
+    const user = await User.findById(req.user._id);
 
-    await isWorkerOfOrganization(assignedTo, organizationId);
+    const org = user.organization;
+
+    if (!org) {
+      return next(
+        new errorHandler("You are not admin to any organization.", 401)
+      );
+    }
+
+    await isAdmin(req.user._id, org);
+
+    await isWorkerOfOrganization(assignedTo, org);
 
     // Find the need
     const need = await Need.findById(needId);
@@ -46,7 +57,7 @@ const createTask = async (req, res) => {
     const task = new Task({
       need: needId,
       assignedTo,
-      organization: organizationId,
+      organization: org,
       deadline,
     });
 
@@ -79,6 +90,50 @@ const updateTaskStatus = async (req, res) => {
   }
 };
 
-module.exports = { createTask, updateTaskStatus };
+const getAllTasks = catchAsyncErrors(async (req, res, next) => {
+  const adminOrganizationId = req.user.organization;
 
-module.exports = { createTask, updateTaskStatus };
+  if (!adminOrganizationId) {
+    return res
+      .status(403)
+      .json({ message: "You are not authorized to view tasks." });
+  }
+
+  const tasks = await Task.find({ organization: adminOrganizationId })
+    .populate("assignedTo", "name email")
+    .populate("need", "type description location urgencyLevel")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    data: tasks,
+  });
+});
+
+const getAssignedTasks = catchAsyncErrors(async (req, res, next) => {
+  const workerId = req.user._id;
+
+  const tasks = await Task.find({ assignedTo: workerId })
+    .populate("organization", "name location")
+    .populate("need", "type description location urgencyLevel")
+    .sort({ createdAt: -1 });
+
+  if (!tasks || tasks.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "No tasks assigned to you.",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: tasks,
+  });
+});
+
+module.exports = {
+  createTask,
+  updateTaskStatus,
+  getAllTasks,
+  getAssignedTasks,
+};

@@ -25,11 +25,17 @@ const needSchema = new mongoose.Schema({
       required: [true, "Please provide the longitude of the location."],
     },
   },
-  status: {
+  urgency: {
     type: String,
-    enum: ["open", "assigned", "fulfilled", "closed"],
+    enum: ["high", "medium", "low"],
     default: "open",
   },
+  resources: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resource",
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

@@ -7,6 +7,8 @@ const sendEmail = require("../utils/sendEmail");
 const sendToken = require("../utils/jwtToken");
 const catchAsyncErrors = require("../Middlewares/catchAsyncErrors");
 const Task = require("../Models/taskSchema");
+const Need = require("../Models/needModel");
+const Organization = require("../Models/organizationsModel");
 
 // Register
 exports.registerUser = async (req, res, next) => {
@@ -52,8 +54,6 @@ exports.registerUser = async (req, res, next) => {
       emailVerificationOtp: otp,
       otpExpires,
     });
-
-    console.log(user.email);
 
     // Send OTP to user's email
     await sendEmail({
@@ -106,6 +106,8 @@ exports.verifyEmail = async (req, res) => {
     res.status(200).json({
       message: "Email verified successfully. You can now log in.",
     });
+
+    sendToken(user, 200, res);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -239,6 +241,110 @@ exports.updateProfile = catchAsyncErrors(async (req, res, next) => {
 
   res.status(200).json({ success: true, user });
 });
+
+// get all user
+exports.getAllUsers = catchAsyncErrors(async (req, res, next) => {
+  const users = await User.find({});
+
+  res.status(200).json({ success: true, users });
+});
+
+// delete user
+exports.deleteUser = catchAsyncErrors(async (req, res, next) => {
+  const userId = req.params.id;
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return next(new ErrorHandler("User not found", 404));
+  }
+
+  await user.deleteOne();
+
+  res.status(200).json({
+    success: true,
+    message: "User deleted successfully",
+  });
+});
+
+// promote user to admin
+exports.promotUserToAdmin = catchAsyncErrors(async (req, res, next) => {
+  const userId = req.params.id;
+  const roleToAssign = req.body.role;
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (user.role === roleToAssign) {
+    return res.status(400).json({ message: `User is already an admin.` });
+  }
+
+  user.role = roleToAssign;
+  await user.save();
+
+  return res.status(200).json({
+    success: true,
+    message: `User with name: ${user.name} has been promoted to admin.`,
+  });
+});
+
+// get individual needs
+exports.getIndividualNeeds = catchAsyncErrors(async (req, res, next) => {
+  const userId = req.user._id;
+
+  const needs = await Need.find({ user: userId });
+
+  if (!needs || needs.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "No needs found for this user.",
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    needs,
+  });
+});
+
+// // get nearby organizations
+// exports.getNearbyOrganizations = catchAsyncErrors(async (req, res, next) => {
+//   const user = await User.findById(req.user._id);
+
+//   const { latitude, longitude } = user.location;
+
+//   if (!latitude || !longitude) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Please provide your current location.",
+//     });
+//   }
+
+//   // Fetch all organizations
+//   const organizations = await Organization.find({});
+
+//   // Filter organizations based on proximity (e.g., 10km radius)
+//   const nearbyOrganizations = organizations.filter((organization) => {
+//     const orgLocation = organization.location;
+//     const distance = geolib.getDistance(
+//       { latitude, longitude },
+//       { latitude: orgLocation.latitude, longitude: orgLocation.longitude }
+//     );
+
+//     //10km
+//     return distance <= 10000;
+//   });
+
+//   res.status(200).json({
+//     success: true,
+//     data: nearbyOrganizations,
+//   });
+// });
+
+// --------------------------------------------------------------------------
 
 // ------------TASKS----------------
 

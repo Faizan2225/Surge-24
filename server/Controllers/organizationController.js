@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const sendEmail = require("../Utils/sendEmail");
 const Need = require("../Models/needModel");
 const geolib = require("geolib");
+const Resource = require("../Models/resourceSchema");
 
 exports.createOrganization = catchAsyncErrors(async (req, res, next) => {
   const { name, email, contactNumber, address, latitude, longitude } = req.body;
@@ -16,10 +17,6 @@ exports.createOrganization = catchAsyncErrors(async (req, res, next) => {
     return next(
       new errorHandler("User must be verified to perform this action.", 403)
     );
-  }
-
-  if (!admin || admin.role !== "organization_admin") {
-    return next(new errorHandler("Only admins can create organizations.", 403));
   }
 
   // Check if the organization email already exists
@@ -44,6 +41,12 @@ exports.createOrganization = catchAsyncErrors(async (req, res, next) => {
     otpExpires,
     admin: req.user._id,
   });
+
+  admin.role = "organization_admin";
+  admin.organization = organization._id;
+
+  await admin.save();
+  await organization.save();
 
   // Send OTP to user's email
   await sendEmail({
@@ -91,12 +94,14 @@ exports.verifyEmail = async (req, res) => {
     await organization.save();
 
     res.status(200).json({
-      message: "Email verified successfully. You can now log in.",
+      message: "Email verified successfully. Organization created.",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+// update organization
 
 // add worker to organization
 exports.addWorkerToOrganization = catchAsyncErrors(async (req, res, next) => {
@@ -211,6 +216,13 @@ exports.updateOrganization = catchAsyncErrors(async (req, res, next) => {
   });
 });
 
+// get all organizations
+exports.getAllOrganizations = catchAsyncErrors(async (req, res, next) => {
+  const organizations = await Organization.find({});
+
+  res.status(200).json({ success: true, organizations });
+});
+
 // get needs within 10km radius
 exports.getNeedsFromRadius = catchAsyncErrors(async (req, res, next) => {
   const organizationId = req.params.organizationId;
@@ -240,4 +252,41 @@ exports.getNeedsFromRadius = catchAsyncErrors(async (req, res, next) => {
   });
 
   return res.status(200).json({ needs: nearbyNeeds });
+});
+
+// get nearby resources
+exports.getNearbyResources = catchAsyncErrors(async (req, res, next) => {
+  const organizationId = req.user.organization;
+
+  const organization = await Organization.findById(organizationId);
+
+  if (!organization) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Organization not found" });
+  }
+
+  const { latitude, longitude } = organization.location;
+
+  // Fetch all resources
+  const resources = await Resource.find({});
+
+  // Filter resources based on proximity (e.g., 10km radius)
+  const nearbyResources = resources.filter((resource) => {
+    const resourceLocation = resource.location;
+    const distance = geolib.getDistance(
+      { latitude, longitude },
+      {
+        latitude: resourceLocation.latitude,
+        longitude: resourceLocation.longitude,
+      }
+    );
+
+    return distance <= 10000;
+  });
+
+  res.status(200).json({
+    success: true,
+    data: nearbyResources,
+  });
 });

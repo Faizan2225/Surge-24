@@ -18,6 +18,8 @@ const errorMiddleware = require("./Middlewares/error");
 const userRoutes = require("./Routes/userRoutes");
 const orgRoutes = require("./Routes/organizationRoutes");
 const needRoutes = require("./Routes/needRoutes");
+const taskRoutes = require("./Routes/taskRoutes");
+const resourceRoutes = require("./Routes/resourceRoutes");
 
 app.use(express.json());
 
@@ -30,6 +32,8 @@ app.use(fileUpload());
 app.use("/api/v1", userRoutes);
 app.use("/api/v1", orgRoutes);
 app.use("/api/v1", needRoutes);
+app.use("/api/v1", taskRoutes);
+app.use("/api/v1", resourceRoutes);
 
 app.use(errorMiddleware);
 
